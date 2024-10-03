@@ -1,5 +1,6 @@
 import bpy
 
+
 IGNORED_ATTRIBUTES = ["co", "co_ui", "select_control_point", "select_left_handle", "select_right_handle"]
 
 

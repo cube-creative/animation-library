@@ -1,8 +1,6 @@
+import bpy
 import contextlib
 import logging
-
-import bpy
-
 
 def get_viewport_context():
     for window in bpy.context.window_manager.windows:

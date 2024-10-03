@@ -1,6 +1,6 @@
-import bl_app_override
 import bpy
 from bl_app_override.helpers import AppOverrideState
+from bl_app_override import class_filter
 from bpy_extras import asset_utils
 
 from .asset.asset_file_info import get_created_date
@@ -303,7 +303,7 @@ class AssetBrowserUIOverrideState(AppOverrideState):
     def class_ignore():
         classes = []
         classes.extend(
-            bl_app_override.class_filter(
+            class_filter(
                 bpy.types.Panel,
                 # Match any of these values
                 bl_space_type={

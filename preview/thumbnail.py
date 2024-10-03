@@ -1,82 +1,60 @@
 from dataclasses import dataclass
-import logging
 import re
-import time
 import bpy 
 import gpu
 from gpu_extras.batch import batch_for_shader
 import math
 from mathutils import Matrix
 import numpy
+import struct
+from queue import Queue
 
 
 THUMBNAIL_NAME_REGEX = re.compile("(?P<asset_name>.+)_THUMBNAIL_(?P<frame_number>\d+)")
 THUMBNAIL_SIZE = 128
 
-
 @dataclass
-class Thumbnail:
+class AnimationPreviewMetadata:
+    """Dataclass to store loaded metadata of an animation preview.
+    """
     asset_name: str
-    image: bpy.types.Image
+    buffer: gpu.types.Buffer
     frames_total: int
     frames_rows: int
 
 
-def _find_asset_thumbnail( asset_name: str, images_names: list[str]):
-        for image_name in images_names:
-            match = THUMBNAIL_NAME_REGEX.match(image_name)
-            if match is None:
-                continue
-            metadata = match.groupdict()
-            if metadata["asset_name"] == asset_name:
-                return (image_name, match.groupdict())
-        return (None, None)
-
-
-def _link_asset_thumbnail(asset_name, asset_path: str):
-        start = time.time()
-        # Try to append preview image
-        with bpy.data.libraries.load(asset_path, link=True) as (data_from, data_to):
-            thumb_name, _ = _find_asset_thumbnail(asset_name, data_from.images)
-            data_to.images = [thumb_name]
-        
-        logging.info(f"Thumbnail loaded in {time.time()-start} ms")
-
-
-def get_asset_thumbnail(
-          asset_name: str,
-          asset_path: str=None)-> Thumbnail:
-    """Get the thumbnail image for the given asset name.
-
-    Args:
-        asset_name (str): The name of the asset to get the thumbnail for
-        create (bool, optional): If True, create a new thumbnail if none is found. Defaults to True.
-        asset_path (str, optional): The path to the asset to load the thumbnail from. Defaults to None.
-
-    Raises:
-        FileNotFoundError: If no thumbnail is found and create is False
-
-    Returns:
-        bpy.types.Image: The thumbnail image
-    """
-    
-    name, info = _find_asset_thumbnail(asset_name, bpy.data.images.keys())
-
-    if name is None and asset_path not in [None, ""]:
-        _link_asset_thumbnail(asset_name, asset_path)
-        name, info = _find_asset_thumbnail(asset_name, bpy.data.images.keys())
-    if name is not None:
-        thumbnail_image = bpy.data.images[name]
-        frame_total = int(info["frame_number"])
-        return Thumbnail(
-            asset_name=asset_name,
-            image=thumbnail_image,
-            frames_total=frame_total,
-            frames_rows=thumbnail_image.size[0]/THUMBNAIL_SIZE
-        )
-    else:
-        return None
-
+def load_thumbnail(queue:Queue, asset_name, asset_path):
+    animation_preview_texture = None
+    if asset_path not in [None, ""]:
+        # Use temporary data to load the asset to avoid datablock linking persistence
+        with bpy.data.temp_data(filepath=asset_path) as tmp_data:
+            # Load asset data
+            with tmp_data.libraries.load(asset_path, link=False) as (data_from, data_to):
+                data_to.actions = data_from.actions
+            
+            asset = tmp_data.actions.get(asset_name)
+            anim_preview = asset.animation_preview
+            if anim_preview is not None:
+                buffer_data = gpu.types.Buffer(
+                    'FLOAT',
+                    anim_preview.preview_buffer_size,
+                    struct.unpack(
+                        f'{anim_preview.preview_buffer_size}f',
+                        asset.animation_preview.preview_buffer
+                    )
+                )
+                animation_preview_texture = buffer_data
+            if animation_preview_texture is not None:
+                queue.put(
+                    AnimationPreviewMetadata(
+                        asset_name=asset_name,
+                        buffer=animation_preview_texture,
+                        frames_total=anim_preview.frames_total,
+                        frames_rows=anim_preview.frames_rows
+                    ),
+                    block=False
+                )
+    #TODO: Put default image
 
 def asset_generate_animation_preview(
         asset: bpy.types.ID,
@@ -93,29 +71,30 @@ def asset_generate_animation_preview(
     Returns:
         bpy.types.Image: The image buffer containing the captured animation
     """
-    animation_preview = get_asset_thumbnail(asset.name)
-    if animation_preview is not None:
-        bpy.data.images.remove(animation_preview.image)
-    animation_preview = create_thumbnail(asset, frame_range=frame_range)
+    # Create thumbnail image 
+    frame_count = frame_range[1]-frame_range[0]
+    frame_in_row = math.ceil(math.sqrt(frame_count))
+    image_width = THUMBNAIL_SIZE*frame_in_row
+    
     # Check if the total number of frames has changed
     width = height = THUMBNAIL_SIZE
-    canvas_width = canvas_height = animation_preview.image.size[0]
+    canvas_width = canvas_height = image_width
 
     preview_spritesheet = gpu.types.GPUOffScreen(
         canvas_width,
         canvas_height
     )
-    img_size = 2/animation_preview.frames_rows
+    img_size = 2/frame_in_row
     shader = gpu.shader.from_builtin('IMAGE')
 
     for frame in range(frame_range[0], frame_range[1]):
-        remaped_frame = numpy.interp(frame, [frame_range[0], frame_range[1]], [0, animation_preview.frames_total])
+        remaped_frame = numpy.interp(frame, [frame_range[0], frame_range[1]], [0, frame_count])
         bpy.context.scene.frame_current= frame
         capture = _capture_viewport(context)
         captured_viewport = gpu.types.GPUTexture((width, height), data=capture)
         x, y = get_frame_coordinates(
             remaped_frame-1,
-            animation_preview,
+            frame_in_row,
             remap_to_range=(-1, 1)
         )
         pos = (
@@ -149,22 +128,22 @@ def asset_generate_animation_preview(
                 shader.uniform_sampler("image", captured_viewport)
                 batch.draw(shader)
 
-    # export result        
     with preview_spritesheet.bind():
         pixelBuffer = fb.read_color(0, 0, canvas_width, canvas_height, 4, 0, 'FLOAT')
-        pixelBuffer.dimensions = canvas_width * canvas_height * 4
+        buffer_dimension = canvas_width * canvas_height * 4
+        pixelBuffer.dimensions = buffer_dimension
 
-    # thumbnail.image.scale(canvas_width, canvas_height)
-    animation_preview.image.pixels.foreach_set(pixelBuffer)
-    animation_preview.image.pack()
-    preview_spritesheet.free()
-
-    return animation_preview
-
+        # export result        
+        asset.animation_preview.preview_buffer = struct.pack(f'{buffer_dimension}f', *pixelBuffer)
+        asset.animation_preview.preview_buffer_size = buffer_dimension
+        asset.animation_preview.frames_total = frame_count
+        asset.animation_preview.frames_rows = frame_in_row
+        asset.animation_preview.frame_size = THUMBNAIL_SIZE
  
+
 def get_frame_coordinates(
         frame:int, 
-        thumbnail: Thumbnail,
+        square_size:int,
         remap_to_range: tuple[float, float] = None):
     """Get the coordinates of the frame in the thumbnail image.
 
@@ -179,13 +158,13 @@ def get_frame_coordinates(
     # temporary fix for negative frame
     if frame < 0:
         frame = 0
-    row = frame // thumbnail.frames_rows
-    col = frame % thumbnail.frames_rows
+    row = frame // square_size
+    col = frame % square_size
     # TODO: Handle case where frame is out of bounds
 
     if remap_to_range is not None:
-        row = numpy.interp(row, [0, thumbnail.frames_rows], remap_to_range)
-        col = numpy.interp(col, [0, thumbnail.frames_rows], remap_to_range)
+        row = numpy.interp(row, [0, square_size], remap_to_range)
+        col = numpy.interp(col, [0, square_size], remap_to_range)
 
     return row, col
 
@@ -283,24 +262,3 @@ def asset_generate_preview(
 
     # Save the image buffer back to the ID preview
     preview.image_pixels_float[:] = preview_pixels
-
-def create_thumbnail(
-        asset: bpy.types.ID,
-        frame_range: tuple[int, int] = (1, 50)
-    ):
-    frame_count = frame_range[1]-frame_range[0]
-    frame_in_row = math.ceil(math.sqrt(frame_count))
-    image_width = THUMBNAIL_SIZE*frame_in_row
-    thumbnail_image = bpy.data.images.new(
-        f"{asset.name}_THUMBNAIL_{frame_count}",
-        image_width,
-        image_width,
-        float_buffer=True
-    )
-    animation_preview = Thumbnail(
-    asset_name=asset.name,
-    image=thumbnail_image,
-    frames_total=frame_count,
-    frames_rows=thumbnail_image.size[0]/THUMBNAIL_SIZE
-    )
-    return animation_preview

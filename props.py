@@ -98,6 +98,30 @@ class EditedAssetMetadata(bpy.types.PropertyGroup):
         ) # type: ignore
     active_tag_index: bpy.props.IntProperty() # type: ignore
 
+
+class AnimationPreview(bpy.types.PropertyGroup):
+    preview_buffer: bpy.props.StringProperty(
+        name="Animation preview",
+        subtype='BYTE_STRING',
+    ) # type: ignore
+    preview_buffer_size: bpy.props.IntProperty(
+        name="Animation preview buffer size",
+        default=0
+    ) # type: ignore
+    frames_total: bpy.props.IntProperty(
+        name="Total frames number in preview",
+        default=0
+    ) # type: ignore
+    frames_rows: bpy.props.IntProperty(
+        name="Rows",
+        default=0
+    ) # type: ignore
+    frame_size: bpy.props.IntProperty(
+        name="Frame pixel size",
+        default=128
+    ) # type: ignore
+
+
 @persistent
 def initialize_asset_metadata(scene):
     context = bpy.context
@@ -114,6 +138,7 @@ CLASSES = (
     AssetPredefinedTags,
     NewAssetMetadata,
     EditedAssetMetadata,
+    AnimationPreview
 )
 
 
@@ -129,12 +154,18 @@ def register():
     bpy.types.WindowManager.new_asset_metadata = bpy.props.PointerProperty(type=NewAssetMetadata)
     bpy.types.WindowManager.edited_asset_metadata = bpy.props.PointerProperty(type=EditedAssetMetadata)
     bpy.app.handlers.load_post.append(initialize_asset_metadata)
+    bpy.types.Action.animation_preview = bpy.props.PointerProperty(
+        type=AnimationPreview,
+        name="Animation Preview",
+        description="Asset animation preview",
+        options={'HIDDEN'},
+    ) # type: ignore
 
 def unregister():
     del bpy.types.WindowManager.asset_tags
     del bpy.types.WindowManager.new_asset_metadata
     del bpy.types.WindowManager.edited_asset_metadata
-
+    del bpy.types.Action.animation_preview
     for cls in CLASSES:
         bpy.utils.unregister_class(cls)
     

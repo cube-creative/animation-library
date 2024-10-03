@@ -8,7 +8,6 @@ import bpy
 
 from .asset import asset_editor
 from .asset.asset_metadata import AssetMetadata, update_asset_metadata
-from .asset.asset_publisher import push_asset
 from .asset.asset_type import AssetType, get_asset_type
 from .catalog import catalog_editor
 from .catalog.catalog_parser import get_path_from_uuid
@@ -318,7 +317,7 @@ class ASSETLIB_OP_CreateAsset(bpy.types.Operator):
                 )
                 update_asset_metadata(action_asset_metadata, value)  
                 # Push the asset
-                push_asset(value, asset_file_path)
+                bpy.data.libraries.write(asset_file_path, {value}, compress=True, fake_user=True)
                 logging.info(f"Asset {key} created in {asset_file_path}")
                 
                 # clean up
@@ -351,8 +350,8 @@ class ASSETLIB_OP_CreateAsset(bpy.types.Operator):
             )
 
         thumbnail.asset_generate_preview(
-        asset,
-        context
+            asset,
+            context
         )
 
         # Add overlay
@@ -434,6 +433,7 @@ class ASSETLIB_OP_ApplyAnimationAsset(bpy.types.Operator):
                 data_to.actions = [selected_asset.name]
 
         src_action = bpy.data.actions[selected_asset.name]
+        src_action.use_fake_user = False
 
         if bpy.context.object.animation_data is None or bpy.context.object.animation_data.action is None:
             bpy.context.object.animation_data_create()

@@ -45,10 +45,10 @@ def is_creator() -> bool:
     return getpass.getuser().lower() in _get_creators()
 
 def can_edit(author: str) -> bool:
-    return is_super_user() or author_is_current_user(author)
+    return (is_super_user() or author_is_current_user(author)) or not rights_file_exists()
 
 def can_create() -> bool:
-    return is_super_user() or is_creator()
+    return (is_super_user() or is_creator()) or not rights_file_exists()
 
 def rights_file_exists() -> bool:
     users_rights_file = _get_users_rights_file()
