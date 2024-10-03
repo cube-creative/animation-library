@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+/.idea
+.coverage
+.history
+.vscode/
+
+
+Thumbs.db
+
+.vscode/
+.env
+venv*/
+blender3.egg-info/**
+build/**
