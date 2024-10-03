@@ -14,7 +14,7 @@ def get_viewport_context():
 
 
 @contextlib.contextmanager
-def bones_selected(context: bpy.types.Context, bones: list[bpy.types.PoseBone]) -> None:
+def bones_selected(context: bpy.types.Context, bones: list[bpy.types.PoseBone]):
     """Temporarily change the bone selection.
 
     Args:
