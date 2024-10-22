@@ -299,7 +299,7 @@ class ASSETLIB_OP_CreateAsset(bpy.types.Operator):
                 # Create the asset catalog
                 catalog_uuid = None
                 prefs = get_preferences()
-                if prefs.autogenerate_catalog_entry:
+                if prefs.catalog_generator:
                     entry_path = prefs.catalog_generator.generate_entry_path()
                     catalog_parent_path = entry_path.split('/')[0]
                     catalog_editor.add_entry(catalog_parent_path, library_path)

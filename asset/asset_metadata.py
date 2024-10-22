@@ -12,7 +12,8 @@ class AssetMetadata:
 
 
 def update_asset_metadata(asset_metadata, new_asset):
-    new_asset.asset_data.catalog_id = asset_metadata.catalog_id
+    if asset_metadata.catalog_id:
+        new_asset.asset_data.catalog_id = asset_metadata.catalog_id
     # Add tags
     for tag in asset_metadata.tags:
         new_asset.asset_data.tags.new(
