@@ -47,7 +47,7 @@ def _update_catalog_generator(self, context):
 
 def _get_available_configuration_provider_enum(self, context):
     avaiable_providers = [
-        ("DISABLED", "Disabled", "Dont generate catalog path"),
+        ("DISABLED", "Disabled", "Dont provide extra configuration"),
     ]
 
     for config_provider in BUILTIN_TAG_PROVIDERS:
@@ -68,12 +68,12 @@ def _get_default_configuration_provider():
         return getattr(importlib.import_module(f'.configuration.{provider_name}_configuration_provider', __package__), f'{provider_name.capitalize()}ConfigurationProvider')()
 
 def _update_config_provider(self, context):
-    generator_name = self.catalog_path_generator_method.lower()
+    generator_name = self.configuration_provider_name.lower()
     if generator_name == "disabled":
         self.catalog_generator = None
         return
     else:
-        self.catalog_generator = getattr(importlib.import_module(f'.configuration.{generator_name}_catalog_generaror', __package__), f'{generator_name.capitalize()}CatalogGenerator')()
+        self.catalog_generator = getattr(importlib.import_module(f'.configuration.{generator_name}_catalog_generaror', __package__), f'{generator_name.capitalize()}ConfigurationProvider')()
     
 
 
@@ -85,7 +85,7 @@ class AnimationLibraryPreferences(bpy.types.AddonPreferences):
         update=_update_catalog_generator,
     ) # type: ignore
     catalog_generator: AbstractCatalogGenerator = _get_default_catalog_generator()
-    configuration_provider: bpy.props.EnumProperty(
+    configuration_provider_name: bpy.props.EnumProperty(
         name="Configuration provider",
         items=_get_available_configuration_provider_enum,
         update=_update_config_provider,
@@ -96,7 +96,7 @@ class AnimationLibraryPreferences(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
         layout.row().prop(self, "catalog_path_generator_method", text="Automatic catalog creation")
-        layout.row().prop(self, "configuration_provider", text="Configuration provider")
+        layout.row().prop(self, "configuration_provider_name", text="Configuration provider")
 
 
 def get_preferences():
