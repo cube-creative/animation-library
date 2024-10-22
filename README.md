@@ -1,6 +1,6 @@
 # Animation library
 
-Animation Library: a Blender add-on to enhance Animation / Pose banking workflow within the Asset Browser.
+Animation Library: a Blender add-on to enhance Animation / Pose asset's workflow within the Asset Browser.
 
 ## Features
 
