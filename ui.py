@@ -87,8 +87,6 @@ class ASSETBROWSER_PT_infos(asset_utils.AssetBrowserPanel, bpy.types.Panel):
             asset_edited_data = wm.edited_asset_metadata
             name_row = layout.row(align=True)
             name_row.prop(asset_edited_data, "name")
-            if is_animation_asset:
-                name_row.enabled = False
             catalog_row = layout.row(align=True)
             catalog_row.prop(asset_edited_data, "catalog", text="Catalog")
 
