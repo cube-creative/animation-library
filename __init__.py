@@ -20,15 +20,13 @@ def register():
     props.register()
     ops.register()
     ui.register()
-    keymaps.register()
-
     assetbrowser_ui_override.setup()
+    keymaps.register()
 
 
 def unregister():
-    assetbrowser_ui_override.teardown()
-    
     keymaps.unregister()
+    assetbrowser_ui_override.teardown()
     ui.unregister()
     ops.unregister()
     props.unregister()
